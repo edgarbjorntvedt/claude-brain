@@ -49,3 +49,6 @@ temp/
 # Personal
 personal/
 archive/
+-e 
+# Configuration files
+config.js
