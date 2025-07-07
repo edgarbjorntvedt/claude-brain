@@ -1,4 +1,5 @@
 
+import { CONFIG } from "./config.js";
 /**
  * Brain Unified MCP Server
  * 
