@@ -128,8 +128,10 @@ function createExecutionLog(code, language, description, status = 'running') {
   
   const logEntry = {
     id: execId,
+    execution_id: execId,  // For monitoring compatibility
     timestamp: timestamp.toISOString(),
     type: language,
+    language: language,  // For monitoring compatibility
     description: description || `Execute ${language} code`,
     code: code,
     status: status,
@@ -458,6 +460,7 @@ const tools = [
       required: ['code']
     },
     handler: async ({ code, language = 'auto', description }) => {
+      let execId, logEntry;
       try {
         // Detect language
         if (language === 'auto') {
@@ -465,6 +468,11 @@ const tools = [
             ? 'python' 
             : 'shell';
         }
+        
+        // Create execution log
+        const logResult = createExecutionLog(code, language, description);
+        execId = logResult.execId;
+        logEntry = logResult.logEntry;
         
         let output = '';
         const startTime = Date.now();
@@ -492,10 +500,27 @@ const tools = [
           if (stderr) output += `⚠️ Errors:\\n${stderr}`;
         }
         
-        output += `⏱️ Execution time: ${Date.now() - startTime}ms`;
+        const executionTime = Date.now() - startTime;
+        output += `⏱️ Execution time: ${executionTime}ms`;
+        
+        // Save execution log
+        if (execId && logEntry) {
+          logEntry.status = 'completed';
+          logEntry.output = output;
+          logEntry.execution_time = executionTime / 1000;
+          saveExecutionLog(execId, logEntry);
+        }
         
         return { content: [{ type: 'text', text: output }] };
       } catch (error) {
+        // Save error in execution log
+        if (execId && logEntry) {
+          logEntry.status = 'error';
+          logEntry.error = error.message;
+          logEntry.execution_time = (Date.now() - (startTime || Date.now())) / 1000;
+          saveExecutionLog(execId, logEntry);
+        }
+        
         return { 
           content: [{ 
             type: 'text', 
