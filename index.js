@@ -9,11 +9,16 @@ import { CONFIG } from "./config.js";
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import fs from 'fs';
+import path from 'path';
+
+// Debug logging
+const DEBUG_LOG_FILE = '/tmp/mcp_debug.log';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -22,14 +27,51 @@ const __dirname = dirname(__filename);
 // Configuration
 const BRAIN_DB_PATH = CONFIG.BRAIN_DB_PATH;
 const VAULT_PATH = CONFIG.VAULT_PATH;
-const BRAIN_NOTES_PATH = '/Users/bard/Code/brain-notes';
-const PYTHON_PATH = '/Users/bard/Code/brain-notes/.venv/bin/python';
+const BRAIN_NOTES_PATH = __dirname;  // Use current directory
+const PYTHON_PATH = '/usr/local/bin/python3';
 const LOG_DIR = CONFIG.LOG_DIR;
 
 // Import crypto for future enhancements
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
+
+// Helper function to execute Python code via spawn, avoiding shell escaping issues
+function executePythonViaSpawn(pythonCode, pythonPath = PYTHON_PATH) {
+  return new Promise((resolve, reject) => {
+    // Set CWD to the project root where obsidian_integration lives
+    const options = {
+      cwd: BRAIN_NOTES_PATH || __dirname
+    };
+    
+    const python = spawn(pythonPath, ['-'], options); // Pass options with CWD
+
+    let stdout = '';
+    let stderr = '';
+
+    python.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    python.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    python.on('close', (code) => {
+      if (code !== 0) {
+        return reject(new Error(`Python process exited with code ${code}: ${stderr}`));
+      }
+      // Return both stdout and stderr for compatibility
+      resolve({ stdout, stderr });
+    });
+    
+    python.on('error', (err) => {
+      reject(err);
+    });
+
+    // Write the Python code to the process's standard input
+    python.stdin.write(pythonCode);
+    python.stdin.end();
+  });
+}
 
 
 
@@ -176,6 +218,8 @@ const tools = [
         
         return { content: [{ type: 'text', text: output }] };
       } catch (error) {
+        fs.appendFileSync(DEBUG_LOG_FILE, `\nERROR in brain_analyze: ${error.message}\n`);
+        fs.appendFileSync(DEBUG_LOG_FILE, `Stack: ${error.stack}\n`);
         return { 
           content: [{ 
             type: 'text', 
@@ -223,6 +267,9 @@ const tools = [
         
         return { content: [{ type: 'text', text: output }] };
       } catch (error) {
+        fs.appendFileSync(DEBUG_LOG_FILE, `\nERROR in brain_analyze handler: ${error.message}\n`);
+        fs.appendFileSync(DEBUG_LOG_FILE, `Stack: ${error.stack}\n`);
+        fs.appendFileSync(DEBUG_LOG_FILE, `Handler type: SPAWN-BASED\n`);
         return { 
           content: [{ 
             type: 'text', 
@@ -265,6 +312,9 @@ const tools = [
         
         return { content: [{ type: 'text', text: output }] };
       } catch (error) {
+        fs.appendFileSync(DEBUG_LOG_FILE, `\nERROR in brain_analyze handler: ${error.message}\n`);
+        fs.appendFileSync(DEBUG_LOG_FILE, `Stack: ${error.stack}\n`);
+        fs.appendFileSync(DEBUG_LOG_FILE, `Analysis type was: ${analysis_type}\n`);
         return { 
           content: [{ 
             type: 'text', 
@@ -999,9 +1049,12 @@ except Exception as e:
 `;
 
       try {
-        const { stdout, stderr } = await execAsync(
-          `${PYTHON_PATH} -c '${pythonCode.replace(/'/g, "'\"'\"'")}'`
-        );
+        // Debug: Log the Python code being executed
+        // console.log("=== BRAIN ANALYZE PYTHON CODE ===");
+        // console.log(pythonCode);
+        // console.log("==================================");
+        
+        const { stdout, stderr } = await executePythonViaSpawn(pythonCode);
         
         if (stderr && !stderr.includes('Warning')) {
           console.error(`Obsidian tool stderr: ${stderr}`);
@@ -1034,12 +1087,13 @@ except Exception as e:
               output += `🗑️ Deleted: ${result.path}`;
               break;
             case 'list':
-              output += `📚 Found ${result.length} notes:\\n`;
-              for (const note of result.slice(0, 20)) {
-                output += `  • ${note.name} (${note.path})\\n`;
+              const notesList = result.notes || [];
+              output += `📚 Found ${notesList.length} notes:\\n`;
+              for (const note of notesList.slice(0, 20)) {
+                output += `  • ${note.identifier} (${note.path})\\n`;
               }
-              if (result.length > 20) {
-                output += `  ... and ${result.length - 20} more`;
+              if (notesList.length > 20) {
+                output += `  ... and ${notesList.length - 20} more`;
               }
               break;
           }
@@ -1084,12 +1138,24 @@ sys.path.insert(0, '${BRAIN_NOTES_PATH}')
 try:
     from obsidian_integration.unified_search import UnifiedSearch
     searcher = UnifiedSearch(brain_db_path="${BRAIN_DB_PATH}", vault_path="${VAULT_PATH}")
-    results = searcher.search("${escapedQuery}", limit=${limit})
+    
+    # Debug: log the query being executed
+    print(f"Executing search with query: ${escapedQuery}, limit: ${limit}, source: ${source}", file=sys.stderr)
+    
+    results = searcher.search("${escapedQuery}", limit=${limit}, source="${source}")
+    
+    # Debug: log what we got back
+    print(f"Search returned: {results}", file=sys.stderr)
+    
+    # Process results by source
+    all_results = results.get("results", [])
+    brain_results = [r for r in all_results if r.get("source") == "brain"]
+    obsidian_results = [r for r in all_results if r.get("source") == "obsidian"]
     
     output = {
-        "brain_count": len(results.get("brain", [])),
-        "obsidian_count": len(results.get("obsidian", [])),
-        "merged": results.get("merged", [])[:10]
+        "brain_count": len(brain_results),
+        "obsidian_count": len(obsidian_results),
+        "merged": all_results[:10]
     }
     
     print(json.dumps(output))
@@ -1104,18 +1170,23 @@ except Exception as e:
 `;
 
       try {
-        const { stdout, stderr } = await execAsync(
-          `${PYTHON_PATH} -c '${pythonCode.replace(/'/g, "'\"'\"'")}'`,
-          { 
-            maxBuffer: 10 * 1024 * 1024,
-            env: { ...process.env, PYTHONWARNINGS: 'ignore' }
-          }
-        );
+        // Debug: Log the Python code being executed
+        // console.log("=== BRAIN ANALYZE PYTHON CODE (1) ===");
+        // console.log(pythonCode);
+        // console.log("=====================================");
+        
+        const { stdout, stderr } = await executePythonViaSpawn(pythonCode);
         
         // Only log stderr if it's not just warnings
-        if (stderr && !stderr.match(/^(Warning:|UserWarning:|FutureWarning:)/)) {
-          console.error(`Unified search stderr: ${stderr}`);
+        if (stderr) {
+          console.error(`Brain analyze stderr: ${stderr}`);
         }
+        
+        // Debug: Log raw stdout
+        // console.log("=== RAW STDOUT ===");
+        // console.log(stdout);
+        // console.log("==================");
+
         
         // Try to extract JSON from stdout even if there's extra output
         let results;
@@ -1183,57 +1254,80 @@ except Exception as e:
       }
     },
     handler: async ({ analysis_type = 'full', save_report = false }) => {
+      // DEBUG: Proof of life logging
+      fs.appendFileSync(DEBUG_LOG_FILE, `\n=== BRAIN_ANALYZE HANDLER CALLED ===\n`);
+      fs.appendFileSync(DEBUG_LOG_FILE, `Time: ${new Date().toISOString()}\n`);
+      fs.appendFileSync(DEBUG_LOG_FILE, `Analysis type: ${analysis_type}\n`);
+      fs.appendFileSync(DEBUG_LOG_FILE, `Handler location: NEW SPAWN-BASED HANDLER\n`);
+      
       const pythonCode = `
 import sys
 import json
 import warnings
+import traceback
+
 warnings.filterwarnings('ignore')
 
 sys.path.insert(0, '${BRAIN_NOTES_PATH}')
 
 try:
-    from obsidian_integration.brain_analyze import BrainAnalyze
-    analyzer = BrainAnalyze(vault_path="${VAULT_PATH}")
-    results = analyzer.analyze_vault()
+    from obsidian_integration.brain_analyzer import BrainAnalyzer
+    analyzer = BrainAnalyzer(vault_path="${VAULT_PATH}")
+    results = analyzer.full_analysis()
     
     if "${analysis_type}" == "full":
+        # Get connections dict first
+        connections_dict = results.get("connections", {}).get("connections", {})
+        top_hubs_list = list(connections_dict.items())[:5]
+        
         output = {
-            "stats": results.get("stats", {}),
-            "insights": results.get("insights", [])[:3],
-            "orphan_count": len(results.get("orphans", [])),
-            "hub_count": len(results.get("hubs", [])),
-            "top_hubs": results.get("hubs", [])[:5]
+            "stats": results.get("patterns", {}),
+            "insights": results.get("insights", {}).get("insights", [])[:3],
+            "orphan_count": len(results.get("orphans", {}).get("orphans", [])),
+            "hub_count": len(connections_dict),
+            "top_hubs": top_hubs_list
         }
     elif "${analysis_type}" == "connections":
-        output = {"suggestions": results.get("suggestions", [])[:10]}
+        output = {"connections": results.get("connections", {})}
     elif "${analysis_type}" == "orphans":
-        output = {"orphans": results.get("orphans", [])[:20]}
+        orphans_list = results.get("orphans", {}).get("orphans", [])
+        output = {"orphans": orphans_list[:20]}
     elif "${analysis_type}" == "patterns":
         output = results.get("patterns", {})
     elif "${analysis_type}" == "insights":
-        output = {"insights": results.get("insights", [])}
+        output = {"insights": results.get("insights", {}).get("insights", [])}
     else:
         output = {"error": "Unknown analysis type"}
     
     print(json.dumps(output))
 except Exception as e:
-    output = {"error": str(e)}
-    print(json.dumps(output))
+    error_report = {
+        "error": "Python execution failed",
+        "exception_type": str(type(e).__name__),
+        "exception_message": str(e),
+        "traceback": traceback.format_exc()
+    }
+    print(json.dumps(error_report))
+    sys.exit(1)
 `;
 
       try {
-        const { stdout, stderr } = await execAsync(
-          `${PYTHON_PATH} -c '${pythonCode.replace(/'/g, "'\"'\"'")}'`,
-          { 
-            maxBuffer: 10 * 1024 * 1024,
-            env: { ...process.env, PYTHONWARNINGS: 'ignore' }
-          }
-        );
+        // Debug: Log the Python code being executed
+        // console.log("=== BRAIN ANALYZE PYTHON CODE (2) ===");
+        // console.log(pythonCode);
+        // console.log("=====================================");
+        
+        const { stdout, stderr } = await executePythonViaSpawn(pythonCode);
         
         // Only log stderr if it's not just warnings
-        if (stderr && !stderr.match(/^(Warning:|UserWarning:|FutureWarning:)/)) {
+        if (stderr) {
           console.error(`Brain analyze stderr: ${stderr}`);
         }
+        
+        // Debug: Log raw stdout
+        // console.log("=== RAW STDOUT ===");
+        // console.log(stdout);
+        // console.log("==================");
         
         // Try to extract JSON from stdout
         let results;
@@ -1323,7 +1417,10 @@ except Exception as e:
         
         return { content: [{ type: 'text', text: output }] };
       } catch (error) {
-        return { 
+        fs.appendFileSync(DEBUG_LOG_FILE, `\nERROR in brain_analyze: ${error.message}\n`);
+        fs.appendFileSync(DEBUG_LOG_FILE, `Stack: ${error.stack}\n`);
+        fs.appendFileSync(DEBUG_LOG_FILE, `Time: ${new Date().toISOString()}\n`);
+        return {
           content: [{ 
             type: 'text', 
             text: `❌ Analysis error: ${error.message}` 
@@ -1385,6 +1482,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Start server
 async function main() {
   console.error('[Brain Unified] Starting server v1.1.0...');
+  console.error(`[Brain Unified] Working directory: ${__dirname}`);
+  console.error(`[Brain Unified] Python path: ${PYTHON_PATH}`);
+  console.error(`[Brain Unified] Vault path: ${VAULT_PATH}`);
   
   // Initialize state table
   initializeStateTable();
