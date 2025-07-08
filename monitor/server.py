@@ -9,8 +9,11 @@ import glob
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
+from pathlib import Path
 
-LOG_DIR = "/Users/bard/Code/claude-brain/data/logs/execution"
+# Get the project root directory
+PROJECT_ROOT = Path(__file__).parent.parent
+LOG_DIR = os.path.join(PROJECT_ROOT, "data", "logs", "execution")
 PORT = 9998
 
 class LogAPIHandler(BaseHTTPRequestHandler):
