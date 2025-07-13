@@ -1,0 +1,14 @@
+📚 REMINDER: Read help documentation for your tools:
+
+🔧 TOOLS WITH HELP COMMANDS:
+  • brain:brain_help - Brain server tools
+  • brain-manager:brain_manager_help - Context management
+  • todo-manager:todo_help - Task management
+  • project-finder:project_finder_help - Project navigation
+  • tracked-search:search_help - Web search (if available)
+  • smalledit:help - File editing tools
+
+💡 Run each help command with no parameters or "all" to see available tools
+📖 Example: brain_help { "command": "all" }
+
+✨ This ensures you know how to use all tools correctly!

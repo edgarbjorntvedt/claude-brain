@@ -264,21 +264,23 @@ const tools = [
           const prefs = JSON.parse(preferences.value);
           output += '✅ Brain initialized successfully!\\n';
           output += `👤 User: ${prefs.nom_de_plume || 'default'}\\n`;
-          output += `💾 Loaded ${recentMemories.length} recent memories`;
+          output += `💾 Loaded ${recentMemories.length} recent memories\\n\\n`;
         }
         
-        return { content: [{ type: 'text', text: output }] };
-      } catch (error) {
-        fs.appendFileSync(DEBUG_LOG_FILE, `\nERROR in brain_analyze handler: ${error.message}\n`);
-        fs.appendFileSync(DEBUG_LOG_FILE, `Stack: ${error.stack}\n`);
-        fs.appendFileSync(DEBUG_LOG_FILE, `Handler type: SPAWN-BASED\n`);
-        return { 
-          content: [{ 
-            type: 'text', 
-            text: `❌ Error initializing Brain: ${error.message}` 
-          }] 
-        };
-      }
+        // Add help tool reminders
+        output += '📚 REMINDER: Read help documentation for your tools:\\n';
+        output += '\\n🔧 TOOLS WITH HELP COMMANDS:\\n';
+        output += '  • brain:brain_help - Brain server tools\\n';
+        output += '  • brain-manager:brain_manager_help - Context management\\n';
+        output += '  • todo-manager:todo_help - Task management\\n';
+        output += '  • project-finder:project_finder_help - Project navigation\\n';
+        output += '  • tracked-search:search_help - Web search (if available)\\n';
+        output += '  • smalledit:smalledit_help - File editing (if available)\\n';
+        output += '\\n💡 Run each help command with no parameters or "all" to see available tools\\n';
+        output += '📖 Example: brain_help { "command": "all" }\\n';
+        output += '\\n✨ This ensures you know how to use all tools correctly!';
+        
+        return { content: [{ type: 'text', text: output }] };      }
     }
   },
   
