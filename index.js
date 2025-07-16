@@ -460,7 +460,7 @@ const tools = [
       required: ['code']
     },
     handler: async ({ code, language = 'auto', description }) => {
-      let execId, logEntry;
+      let execId, logEntry, startTime;
       try {
         // Detect language
         if (language === 'auto') {
@@ -475,7 +475,7 @@ const tools = [
         logEntry = logResult.logEntry;
         
         let output = '';
-        const startTime = Date.now();
+        startTime = Date.now();
         
         if (language === 'python') {
           output += `🐍 Executing python code: ${description || 'No description provided'}\\n`;
