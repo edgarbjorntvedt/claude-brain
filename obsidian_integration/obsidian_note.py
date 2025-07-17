@@ -7,6 +7,16 @@ import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
+# Import Mercury tracker
+try:
+    from .mercury_tracker import mercury_tracker
+except ImportError:
+    # Create a dummy tracker if import fails
+    class DummyTracker:
+        def track_note_access(self, *args, **kwargs):
+            pass
+    mercury_tracker = DummyTracker()
+
 
 class ObsidianNote:
     def __init__(self, vault_path: str):
@@ -91,6 +101,9 @@ class ObsidianNote:
             # Write the file
             note_path.write_text(full_content, encoding='utf-8')
             
+            # Track in Mercury Evolution
+            mercury_tracker.track_note_access('create', title)
+            
             return {
                 "success": True,
                 "identifier": title,
@@ -110,6 +123,9 @@ class ObsidianNote:
             
             content = note_path.read_text(encoding='utf-8')
             metadata, body = self._parse_frontmatter(content)
+            
+            # Track in Mercury Evolution
+            mercury_tracker.track_note_access('read', identifier)
             
             return {
                 "success": True,
@@ -147,6 +163,9 @@ class ObsidianNote:
             # Write the file
             note_path.write_text(full_content, encoding='utf-8')
             
+            # Track in Mercury Evolution
+            mercury_tracker.track_note_access('update', identifier)
+            
             return {
                 "success": True,
                 "identifier": identifier,
@@ -166,6 +185,9 @@ class ObsidianNote:
             
             # Delete the file
             note_path.unlink()
+            
+            # Track in Mercury Evolution
+            mercury_tracker.track_note_access('delete', identifier)
             
             return {
                 "success": True,
@@ -206,6 +228,10 @@ class ObsidianNote:
                     "path": str(relative_path),
                     "metadata": metadata
                 })
+            
+            # Track in Mercury Evolution if we have results
+            if notes:
+                mercury_tracker.track_note_access('list', folder or 'vault')
             
             return {
                 "success": True,
