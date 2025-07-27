@@ -33,7 +33,7 @@ const LOG_DIR = CONFIG.LOG_DIR;
 
 // Import crypto for future enhancements
 import crypto from 'crypto';
-
+import { OutputFilter, detectCommandType } from './output-filter-esm.js';
 // Helper function to execute Python code via spawn, avoiding shell escaping issues
 function executePythonViaSpawn(pythonCode, pythonPath = PYTHON_PATH) {
   return new Promise((resolve, reject) => {
@@ -443,7 +443,7 @@ const tools = [
     }
   },
   
-  {
+    {
     name: 'brain_execute',
     description: 'Execute Python or Shell code with full system access',
     inputSchema: {
@@ -455,13 +455,25 @@ const tools = [
           enum: ['python', 'shell', 'auto'], 
           default: 'auto' 
         },
-        description: { type: 'string', description: 'What this code does' }
+        description: { type: 'string', description: 'What this code does' },
+        verbose: { 
+          type: 'boolean', 
+          description: 'Return full output without filtering',
+          default: false
+        }
       },
       required: ['code']
     },
-    handler: async ({ code, language = 'auto', description }) => {
+    handler: async ({ code, language = 'auto', description, verbose = false }) => {
       let execId, logEntry, startTime;
       try {
+        // Initialize output filter
+        const filter = new OutputFilter({ 
+          verbose: verbose,
+          maxLines: 50,
+          maxChars: 5000
+        });
+        
         // Detect language
         if (language === 'auto') {
           language = code.includes('import ') || code.includes('def ') || code.includes('print(') 
@@ -475,38 +487,66 @@ const tools = [
         logEntry = logResult.logEntry;
         
         let output = '';
+        let rawOutput = '';
         startTime = Date.now();
         
         if (language === 'python') {
-          output += `🐍 Executing python code: ${description || 'No description provided'}\\n`;
+          output += `🐍 Executing python code: ${description || 'No description provided'}\n`;
           
           const { stdout, stderr } = await execAsync(
             `python3 -c '${code.replace(/'/g, "'\"'\"'")}'`,
             { maxBuffer: 10 * 1024 * 1024 }
           );
           
-          if (stdout) output += `📤 Output:${stdout}`;
-          if (stderr) output += `⚠️ Errors:${stderr}`;
+          rawOutput = stdout || '';
+          if (stderr && !stderr.includes('Warning')) {
+            rawOutput += `\n⚠️ Errors:\n${stderr}`;
+          }
           
         } else {
-          output += `🖥️ Executing shell command: ${description || 'No description provided'}\\n`;
+          output += `🖥️ Executing shell command: ${description || 'No description provided'}\n`;
           
           const { stdout, stderr } = await execAsync(code, {
             shell: true,
             maxBuffer: 10 * 1024 * 1024
           });
           
-          if (stdout) output += `📤 Output:\\n${stdout}`;
-          if (stderr) output += `⚠️ Errors:\\n${stderr}`;
+          rawOutput = stdout || '';
+          if (stderr) {
+            rawOutput += `\n⚠️ Errors:\n${stderr}`;
+          }
+        }
+        
+        // Detect command type for better filtering
+        const commandType = detectCommandType(code);
+        
+        // Filter output
+        const filtered = filter.filter(rawOutput, commandType);
+        
+        if (filtered.metadata.filtered) {
+          output += `📤 Output${filtered.metadata.truncated ? ' (filtered)' : ''}:\n${filtered.result}`;
+          
+          // Add metadata about filtering
+          if (filtered.metadata.truncated) {
+            output += `\n\n📊 Filtering info:\n`;
+            output += `  • Original: ${filtered.metadata.originalLines} lines, ${filtered.metadata.originalSize}\n`;
+            output += `  • Displayed: ${filtered.metadata.displayedLines || filtered.metadata.displayedChars} ${filtered.metadata.truncatedAt === 'lines' ? 'lines' : 'chars'}\n`;
+            if (filtered.metadata.gitStats) {
+              output += `  • Git stats: ${filtered.metadata.summary}\n`;
+            }
+            output += `  • Use verbose: true for full output`;
+          }
+        } else {
+          output += `📤 Output:\n${filtered.result}`;
         }
         
         const executionTime = Date.now() - startTime;
-        output += `⏱️ Execution time: ${executionTime}ms`;
+        output += `\n⏱️ Execution time: ${executionTime}ms`;
         
         // Save execution log
         if (execId && logEntry) {
           logEntry.status = 'completed';
-          logEntry.output = output;
+          logEntry.output = rawOutput; // Store full output in log
           logEntry.execution_time = executionTime / 1000;
           saveExecutionLog(execId, logEntry);
         }
@@ -1031,7 +1071,12 @@ const tools = [
         content: { type: 'string' },
         identifier: { type: 'string' },
         metadata: { type: 'object' },
-        folder: { type: 'string' }
+        folder: { type: 'string' },
+        verbose: { 
+          type: 'boolean', 
+          description: 'Return full content without filtering',
+          default: false
+        }
       },
       required: ['action']
     },
@@ -1100,7 +1145,27 @@ except Exception as e:
             case 'read':
               if (result) {
                 output += `📖 ${result.title}\\n\\n`;
-                output += result.content;
+                
+                // Apply output filtering for large notes
+                if (!args.verbose && result.content) {
+                  const filter = new OutputFilter({
+                    verbose: false,
+                    maxLines: 100,
+                    maxChars: 10000
+                  });
+                  
+                  const filtered = filter.filter(result.content, 'file');
+                  output += filtered.result;
+                  
+                  if (filtered.metadata.truncated) {
+                    output += `\\n\\n📊 Note filtering:\\n`;
+                    output += `  • Original: ${filtered.metadata.originalLines} lines, ${filtered.metadata.originalSize}\\n`;
+                    output += `  • Displayed: ${filtered.metadata.displayedLines || filtered.metadata.displayedChars} ${filtered.metadata.truncatedAt === 'lines' ? 'lines' : 'chars'}\\n`;
+                    output += `  • Use verbose: true for full content`;
+                  }
+                } else {
+                  output += result.content;
+                }
               } else {
                 output += '❌ Note not found';
               }
@@ -1113,12 +1178,21 @@ except Exception as e:
               break;
             case 'list':
               const notesList = result.notes || [];
-              output += `📚 Found ${notesList.length} notes:\\n`;
-              for (const note of notesList.slice(0, 20)) {
-                output += `  • ${note.identifier} (${note.path})\\n`;
-              }
-              if (notesList.length > 20) {
-                output += `  ... and ${notesList.length - 20} more`;
+              
+              if (!args.verbose && notesList.length > 50) {
+                output += `📚 Found ${notesList.length} notes (showing first 50):\\n`;
+                for (const note of notesList.slice(0, 50)) {
+                  output += `  • ${note.identifier} (${note.path})\\n`;
+                }
+                output += `\\n📊 List filtering:\\n`;
+                output += `  • Total notes: ${notesList.length}\\n`;
+                output += `  • Displayed: 50\\n`;
+                output += `  • Use verbose: true for full list`;
+              } else {
+                output += `📚 Found ${notesList.length} notes:\\n`;
+                for (const note of notesList) {
+                  output += `  • ${note.identifier} (${note.path})\\n`;
+                }
               }
               break;
           }
@@ -1144,11 +1218,16 @@ except Exception as e:
       properties: {
         query: { type: 'string' },
         limit: { type: 'number', default: 20 },
-        source: { type: 'string', enum: ['all', 'brain', 'obsidian'], default: 'all' }
+        source: { type: 'string', enum: ['all', 'brain', 'obsidian'], default: 'all' },
+        verbose: { 
+          type: 'boolean', 
+          description: 'Return full results without filtering',
+          default: false
+        }
       },
       required: ['query']
     },
-    handler: async ({ query, limit = 20, source = 'all' }) => {
+    handler: async ({ query, limit = 20, source = 'all', verbose = false }) => {
       // Escape query to prevent Python injection
       const escapedQuery = query.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
       
@@ -1236,8 +1315,11 @@ except Exception as e:
           output += `📊 Found: ${results.brain_count} Brain | ${results.obsidian_count} Obsidian\\n\\n`;
           
           if (results.merged && results.merged.length > 0) {
-            output += '🔝 Top Results:\\n';
-            for (const [i, result] of results.merged.entries()) {
+            const displayLimit = verbose ? results.merged.length : 10;
+            const resultsToShow = results.merged.slice(0, displayLimit);
+            
+            output += `🔝 Top Results${!verbose && results.merged.length > 10 ? ' (showing first 10)' : ''}:\\n`;
+            for (const [i, result] of resultsToShow.entries()) {
               if (result.source === 'brain') {
                 output += `\\n${i+1}. 🧠 ${result.key}\\n`;
                 output += `   Type: ${result.type}\\n`;
@@ -1246,6 +1328,13 @@ except Exception as e:
                 output += `   Path: ${result.path}\\n`;
               }
               output += `   Score: ${result.final_score?.toFixed(3) || 'N/A'}\\n`;
+            }
+            
+            if (!verbose && results.merged.length > 10) {
+              output += `\\n📊 Search filtering:\\n`;
+              output += `  • Total results: ${results.merged.length}\\n`;
+              output += `  • Displayed: 10\\n`;
+              output += `  • Use verbose: true for all results`;
             }
           } else {
             output += '❌ No results found';

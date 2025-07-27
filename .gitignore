@@ -52,3 +52,9 @@ archive/
 -e 
 # Configuration files
 config.js
+
+# Private system documentation
+SYSTEM_CONFIGURATION_REPORT.md
+**/SYSTEM_CONFIGURATION_REPORT.md
+system-report.md
+.private/
