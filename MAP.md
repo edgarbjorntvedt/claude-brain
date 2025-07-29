@@ -8,6 +8,7 @@ This is Claude's navigation map for the Brain system - not human documentation. 
 **Core Location**: `/Users/bard/Code/claude-brain/`
 **Database**: `data/brain.db` (SQLite with FTS)
 **Integration**: Direct MCP connection to Claude Desktop
+**Obsidian Vault**: `/Users/bard/Code/claude-brain/data/BrainVault/` ✅ VERIFIED
 
 ## File Map
 
@@ -15,11 +16,29 @@ This is Claude's navigation map for the Brain system - not human documentation. 
 - **`index.js`** - Main MCP server, all core functions
 - **`package.json`** - Dependencies and scripts  
 - **`data/brain.db`** - SQLite database (memories, state, notes)
+- **`data/BrainVault/`** - Obsidian vault location ✅ CORRECTED 2025-07-29
 - **`MAP.md`** - This navigation file
 
 ### Optional Components
 - **`monitor/server.py`** - Web UI (port 9996) 
 - **`monitor/ui.html`** - Monitoring interface
+
+## System Status Updates (2025-07-29)
+
+### ✅ Major Fixes Completed
+- **Tools Registry Fixed**: No longer reports false "broken" status for working tools
+- **Architecture Paths Corrected**: Obsidian vault path updated in all documentation
+- **sed_edit Quoting Issue**: Diagnosed - use pipe `|` delimiter for paths instead of `/`
+- **ELVIS Integration**: Verified working after restart
+- **Living Architecture Protocol**: Verified functional
+
+### 🔧 Tools Registry Status
+**Working Tools Previously Misreported**: mcp-project-finder, mcp-protocol-tracker, mcp-tracked-search, mcp-subconscious, mcp-tool-tracker, mcp-vision
+**Registry Logic**: Now checks actual package.json main entry instead of hardcoded dist/index.js
+
+### 🚫 Known Issues
+- **sed_edit patterns**: Use `s|old/path|new/path|g` not `s/old/path/new/path/g` for paths
+- **Only broken tool**: mcp-test-documentation (legitimate - missing package.json)
 
 ## Function Map
 
