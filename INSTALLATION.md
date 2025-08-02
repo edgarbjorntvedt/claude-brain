@@ -83,11 +83,11 @@ cat > ~/Library/LaunchAgents/com.user.brain-execution-server.plist << 'EOF'
         <string>/usr/local/bin/uv</string>
         <string>run</string>
         <string>python</string>
-        <string>/Users/bard/Code/mcp-execution-server/server.py</string>
+        <string>/home/edgar/github/mcp-execution-server/server.py</string>
     </array>
     
     <key>WorkingDirectory</key>
-    <string>/Users/bard/Code/mcp-execution-server</string>
+    <string>/home/edgar/github/mcp-execution-server</string>
     
     <key>RunAtLoad</key>
     <true/>
@@ -101,17 +101,17 @@ cat > ~/Library/LaunchAgents/com.user.brain-execution-server.plist << 'EOF'
     </dict>
     
     <key>StandardOutPath</key>
-    <string>/Users/bard/Library/Logs/brain-execution-server.log</string>
+    <string>/home/edgar/Library/Logs/brain-execution-server.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/Users/bard/Library/Logs/brain-execution-server.error.log</string>
+    <string>/home/edgar/Library/Logs/brain-execution-server.error.log</string>
     
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
         <key>HOME</key>
-        <string>/Users/bard</string>
+        <string>/home/edgar</string>
     </dict>
     
     <key>ThrottleInterval</key>
@@ -141,7 +141,7 @@ Add the Brain MCP server to your Claude Desktop configuration:
   "mcpServers": {
     "claude-brain": {
       "command": "node",
-      "args": ["/Users/bard/Code/claude-brain/index.js"]
+      "args": ["/home/edgar/github/claude-brain/index.js"]
     }
   }
 }

@@ -6,12 +6,12 @@ echo "============================================="
 echo
 
 # Copy current database to test location (if you want to test with existing data)
-if [ -f "/Users/bard/Code/brain/data/brain.db" ]; then
+if [ -f "/home/edgar/github/brain/data/brain.db" ]; then
     echo "📋 Option 1: Copy existing database for testing? (y/n)"
     read -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        cp "/Users/bard/Code/brain/data/brain.db" "./data/brain/brain.db"
+        cp "/home/edgar/github/brain/data/brain.db" "./data/brain/brain.db"
         echo "✅ Copied existing database"
     else
         echo "✅ Will start with fresh database"
@@ -42,10 +42,10 @@ cat << 'JSON'
   "mcpServers": {
     "brain-unified": {
       "command": "node",
-      "args": ["/Users/bard/Code/brain-unified/index.js"]
+      "args": ["/home/edgar/github/brain-unified/index.js"]
     },
     "claude-brain-test": {
-      "command": "/Users/bard/Code/claude-brain/start-brain.sh"
+      "command": "/home/edgar/github/claude-brain/start-brain.sh"
     }
   }
 }

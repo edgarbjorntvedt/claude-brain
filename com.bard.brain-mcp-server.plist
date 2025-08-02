@@ -8,17 +8,17 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/node</string>
-        <string>/Users/bard/Code/claude-brain/index.js</string>
+        <string>/home/edgar/github/claude-brain/index.js</string>
     </array>
     
     <key>WorkingDirectory</key>
-    <string>/Users/bard/Code/claude-brain</string>
+    <string>/home/edgar/github/claude-brain</string>
     
     <key>StandardOutPath</key>
-    <string>/Users/bard/Library/Logs/Claude/brain-mcp-server.log</string>
+    <string>/home/edgar/Library/Logs/Claude/brain-mcp-server.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/Users/bard/Library/Logs/Claude/brain-mcp-server.error.log</string>
+    <string>/home/edgar/Library/Logs/Claude/brain-mcp-server.error.log</string>
     
     <key>RunAtLoad</key>
     <true/>
