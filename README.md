@@ -1,6 +1,7 @@
 # Claude Brain 🧠
 
-A unified, clean, and simple persistent memory system for Claude via MCP (Model Context Protocol).
+A unified, clean, and simple persistent memory system for Claude via MCP (Model Context Protocol). All functionality 
+including code execution is built into a single MCP server.
 
 ## Overview
 
@@ -27,28 +28,7 @@ Claude Brain provides Claude with persistent memory across conversations, combin
    uv pip install -e ".[monitor]"
    ```
 
-2. **Set up the Execution Server** (Required for `brain_execute`):
-   The execution server runs on port 9998 and handles code execution requests.
-   
-   ```bash
-   # Navigate to execution server directory
-   cd ~/Code/mcp-execution-server
-   
-   # Initialize with uv
-   uv venv
-   
-   # Install as a service (auto-starts on login)
-   cp ~/Desktop/com.user.brain-execution-server.plist ~/Library/LaunchAgents/
-   launchctl load ~/Library/LaunchAgents/com.user.brain-execution-server.plist
-   launchctl start com.user.brain-execution-server
-   
-   # Verify it's running
-   curl http://localhost:9998/
-   ```
-   
-   **Note**: The execution server must be running for `brain_execute` to work.
-
-3. **Configure Claude Desktop**:
+2. **Configure Claude Desktop**:
    Add to your Claude Desktop config:
    ```json
    {
@@ -184,10 +164,6 @@ claude-brain/
 - Look for errors in Claude Desktop's logs
 
 ### Execution not working
-- **Check if the execution server is running**: `curl http://localhost:9998/`
-- **Start it manually if needed**: `cd ~/Code/mcp-execution-server && uv run python server.py`
-- **Check service status**: `launchctl list | grep brain-execution`
-- **View logs**: `tail -f ~/Library/Logs/brain-execution-server.log`
 - Ensure Node.js is properly installed and in your PATH
 - Check that the brain_execute function is not commented out in index.js
 - Verify you have appropriate permissions for the commands being executed
