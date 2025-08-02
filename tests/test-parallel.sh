@@ -38,6 +38,6 @@ echo
 node --input-type=module -e "
 import('./config.test.js').then(module => {
   global.CONFIG = module.CONFIG;
-  return import('./index.js');
+  return import('../index.js');
 });
 "
