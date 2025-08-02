@@ -11,7 +11,7 @@ class MercuryTracker:
     """Tracks note access in Mercury Evolution"""
     
     def __init__(self):
-        self.mercury_cli = "/home/edgar/github/mcp-mercury-evolution/dist/mercury-track.js"
+        self.mercury_cli = "~/Code/mcp-mercury-evolution/dist/mercury-track.js"
         self.enabled = os.path.exists(self.mercury_cli)
         
     def track_note_access(self, action: str, path: str, from_note: Optional[str] = None):
