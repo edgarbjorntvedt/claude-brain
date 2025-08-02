@@ -1,4 +1,4 @@
-// File: /home/edgar/github/claude-brain/config.example.js
+// File: claude-brain/config.example.js
 // Purpose: Example configuration file for Claude Brain
 
 import { fileURLToPath } from 'url';
