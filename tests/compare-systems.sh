@@ -1,4 +1,6 @@
 #!/bin/bash
+# Source the path configuration
+source "$(dirname "$0")/../paths.sh"
 # Compare old and new Brain systems
 
 echo "🔄 Comparing Brain Systems"
@@ -7,8 +9,8 @@ echo
 
 # Check database sizes
 echo "📊 Database Comparison:"
-OLD_DB="/home/edgar/github/brain/data/brain.db"
-NEW_DB="/home/edgar/github/claude-brain/data/brain/brain.db"
+OLD_DB="$BRAIN_LEGACY_DB"
+NEW_DB="$CLAUDE_BRAIN_ROOT/data/brain/brain.db"
 
 if [ -f "$OLD_DB" ]; then
     OLD_SIZE=$(du -h "$OLD_DB" | cut -f1)
@@ -26,9 +28,9 @@ fi
 
 echo
 echo "📁 Directory Structure:"
-echo "   Old: /home/edgar/github/brain ($(du -sh /home/edgar/github/brain 2>/dev/null | cut -f1))"
-echo "   Old: /home/edgar/github/brain-unified ($(du -sh /home/edgar/github/brain-unified 2>/dev/null | cut -f1))"
-echo "   New: /home/edgar/github/claude-brain ($(du -sh /home/edgar/github/claude-brain 2>/dev/null | cut -f1))"
+echo "   Old: "$BRAIN_LEGACY" ($(du -sh "$BRAIN_LEGACY" 2>/dev/null | cut -f1))"
+echo "   Old: "$BRAIN_LEGACY"-unified ($(du -sh "$BRAIN_LEGACY"-unified 2>/dev/null | cut -f1))"
+echo "   New: "$CLAUDE_BRAIN_ROOT" ($(du -sh "$CLAUDE_BRAIN_ROOT" 2>/dev/null | cut -f1))"
 
 echo
 echo "🔧 Service Status:"

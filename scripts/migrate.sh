@@ -1,4 +1,11 @@
 #!/bin/bash
+# Source the path configuration
+source "$(dirname "$0")/../paths.sh"
+
+# Use configured paths
+BRAIN_DIR="$BRAIN_LEGACY"
+BRAIN_UNIFIED_DIR="$BRAIN_UNIFIED"
+TARGET_DIR="$CLAUDE_BRAIN_ROOT"
 # Migrate essential code from old repositories
 
 set -e
@@ -7,9 +14,9 @@ echo "🔄 Starting migration to claude-brain..."
 echo
 
 # Source directories
-BRAIN_DIR="/home/edgar/github/brain"
-BRAIN_UNIFIED_DIR="/home/edgar/github/brain-unified"
-TARGET_DIR="/home/edgar/github/claude-brain"
+# Paths now loaded from ../paths.sh
+
+
 
 cd $TARGET_DIR
 

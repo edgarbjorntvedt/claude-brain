@@ -1,4 +1,6 @@
 #!/bin/bash
+# Source the path configuration
+source "$(dirname "$0")/../paths.sh"
 # Setup claude-brain for parallel testing with brain-unified
 
 echo "🔄 Setting up claude-brain for parallel testing"
@@ -6,12 +8,12 @@ echo "============================================="
 echo
 
 # Copy current database to test location (if you want to test with existing data)
-if [ -f "/home/edgar/github/brain/data/brain.db" ]; then
+if [ -f ""$BRAIN_LEGACY_DB"" ]; then
     echo "📋 Option 1: Copy existing database for testing? (y/n)"
     read -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        cp "/home/edgar/github/brain/data/brain.db" "./data/brain/brain.db"
+        cp ""$BRAIN_LEGACY_DB"" "./data/brain/brain.db"
         echo "✅ Copied existing database"
     else
         echo "✅ Will start with fresh database"
@@ -42,10 +44,10 @@ cat << 'JSON'
   "mcpServers": {
     "brain-unified": {
       "command": "node",
-      "args": ["/home/edgar/github/brain-unified/index.js"]
+      "args": [""$BRAIN_UNIFIED_INDEX""]
     },
     "claude-brain-test": {
-      "command": "/home/edgar/github/claude-brain/start-brain.sh"
+      "command": ""$CLAUDE_BRAIN_START_SCRIPT""
     }
   }
 }
