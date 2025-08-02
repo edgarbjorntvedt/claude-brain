@@ -22,13 +22,13 @@ run_test() {
     local test_cmd=$2
     
     echo -n "Testing $test_name... "
-    if eval "$test_cmd" > /tmp/test_output.log 2>&1; then
+    if eval "$test_cmd" > ./tmp/test_output.log 2>&1; then
         echo -e "${GREEN}✓ PASSED${NC}"
         ((TESTS_PASSED++))
     else
         echo -e "${RED}✗ FAILED${NC}"
         echo "  Error output:"
-        cat /tmp/test_output.log | head -5 | sed 's/^/    /'
+        cat ./tmp/test_output.log | head -5 | sed 's/^/    /'
         ((TESTS_FAILED++))
     fi
 }
@@ -91,4 +91,4 @@ else
 fi
 
 # Cleanup
-rm -f /tmp/test_output.log
+rm -f ./tmp/test_output.log
