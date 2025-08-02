@@ -1,5 +1,9 @@
 # Claude Brain Installation Guide
 
+**📍 Path Assumptions**: This guide assumes you have cloned the project to `~/Code/claude-brain`. If you're using a 
+different location, adjust the paths accordingly throughout this document.
+
+
 This guide covers the complete installation of Claude Brain, including all components needed for full functionality.
 
 ## Prerequisites
@@ -83,11 +87,11 @@ cat > ~/Library/LaunchAgents/com.user.brain-execution-server.plist << 'EOF'
         <string>/usr/local/bin/uv</string>
         <string>run</string>
         <string>python</string>
-        <string>/home/edgar/github/mcp-execution-server/server.py</string>
+        <string>~/Code/mcp-execution-server/server.py</string>
     </array>
     
     <key>WorkingDirectory</key>
-    <string>/home/edgar/github/mcp-execution-server</string>
+    <string>~/Code/mcp-execution-server</string>
     
     <key>RunAtLoad</key>
     <true/>
@@ -101,17 +105,17 @@ cat > ~/Library/LaunchAgents/com.user.brain-execution-server.plist << 'EOF'
     </dict>
     
     <key>StandardOutPath</key>
-    <string>/home/edgar/Library/Logs/brain-execution-server.log</string>
+    <string>~/Library/Logs/brain-execution-server.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/home/edgar/Library/Logs/brain-execution-server.error.log</string>
+    <string>~/Library/Logs/brain-execution-server.error.log</string>
     
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
         <key>HOME</key>
-        <string>/home/edgar</string>
+        <string>~</string>
     </dict>
     
     <key>ThrottleInterval</key>
@@ -141,7 +145,7 @@ Add the Brain MCP server to your Claude Desktop configuration:
   "mcpServers": {
     "claude-brain": {
       "command": "node",
-      "args": ["/home/edgar/github/claude-brain/index.js"]
+      "args": ["~/Code/claude-brain/index.js"]
     }
   }
 }

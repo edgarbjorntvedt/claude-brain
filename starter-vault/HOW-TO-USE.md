@@ -8,7 +8,7 @@
 cp -r starter-vault/* /path/to/your/obsidian/vault/
 
 # Or to your Brain vault
-cp -r starter-vault/* /Users/[username]/Code/claude-brain/data/BrainVault/
+cp -r starter-vault/* ~/Code/claude-brain/data/BrainVault/
 ```
 
 ### Option 2: Start Fresh

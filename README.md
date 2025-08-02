@@ -32,7 +32,7 @@ Claude Brain provides Claude with persistent memory across conversations, combin
    
    ```bash
    # Navigate to execution server directory
-   cd /home/edgar/github/mcp-execution-server
+   cd ~/Code/mcp-execution-server
    
    # Initialize with uv
    uv venv
@@ -185,7 +185,7 @@ claude-brain/
 
 ### Execution not working
 - **Check if the execution server is running**: `curl http://localhost:9998/`
-- **Start it manually if needed**: `cd /home/edgar/github/mcp-execution-server && uv run python server.py`
+- **Start it manually if needed**: `cd ~/Code/mcp-execution-server && uv run python server.py`
 - **Check service status**: `launchctl list | grep brain-execution`
 - **View logs**: `tail -f ~/Library/Logs/brain-execution-server.log`
 - Ensure Node.js is properly installed and in your PATH

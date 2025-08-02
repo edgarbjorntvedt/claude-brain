@@ -5,10 +5,10 @@ This is Claude's navigation map for the Brain system - not human documentation. 
 
 ## System Overview
 **Primary Function**: Persistent memory and code execution for Claude Desktop via MCP protocol
-**Core Location**: `/home/edgar/github/claude-brain/`
-**Database**: `data/brain.db` (SQLite with FTS)
+**Core Location**: `~/Code/claude-brain/`
+**Database**: `~/Code/claude-brain/data/brain.db` (SQLite with FTS)
 **Integration**: Direct MCP connection to Claude Desktop
-**Obsidian Vault**: `/home/edgar/github/claude-brain/data/BrainVault/` ✅ VERIFIED
+**Obsidian Vault**: `~/Code/claude-brain/data/BrainVault/` ✅ VERIFIED
 
 ## File Map
 
@@ -97,7 +97,7 @@ This is Claude's navigation map for the Brain system - not human documentation. 
 
 ### File Locations
 ```
-/home/edgar/github/claude-brain/
+~/Code/claude-brain/
 ├── index.js              # Main server (all functions)
 ├── data/brain.db         # SQLite database  
 ├── monitor/server.py     # Optional web UI
