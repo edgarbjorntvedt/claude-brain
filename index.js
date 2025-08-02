@@ -28,7 +28,7 @@ const __dirname = dirname(__filename);
 const BRAIN_DB_PATH = CONFIG.BRAIN_DB_PATH;
 const VAULT_PATH = CONFIG.VAULT_PATH;
 const BRAIN_NOTES_PATH = __dirname;  // Use current directory
-const PYTHON_PATH = '/usr/local/bin/python3';
+const PYTHON_PATH = CONFIG.PYTHON_PATH;
 const LOG_DIR = CONFIG.LOG_DIR;
 
 // Import crypto for future enhancements
