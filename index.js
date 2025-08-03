@@ -364,7 +364,13 @@ const tools = [
         
         let output = `🔍 Searching memories for: "${query}"...\\n`;
         output += `✓ Found ${results.length} matching memories:\\n`;
-        
+
+        if (results.length === 0) {
+          if (query.split(' ').length > 1) {
+            output += `Try searching with fewer keywords.\\n`;
+          }
+        }
+
         for (const result of results) {
           output += `\\n📌 ${result.key} (${result.type})\\n`;
           try {
@@ -1636,7 +1642,7 @@ brain_remember {
 Searches both keys and values for matching content.
 
 Parameters:
-- query (required): Search term
+- query (required): Search keyword (preferred) or search term
 - limit: Max results (default: 10)
 
 Example:
@@ -1645,7 +1651,12 @@ brain_recall { "query": "API project", "limit": 5 }
 Notes:
 - Searches are case-insensitive
 - Updates access time for found memories
-- Returns key, type, and content preview`;
+- Returns key, type, and content preview
+
+Best Practices:
+- Use 1-2 keywords for best results
+- Avoid long phrases or full sentences
+- Try synonyms if no results found`;
             break;
             
           case 'brain_execute':
