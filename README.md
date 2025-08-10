@@ -35,11 +35,17 @@ Claude Brain provides Claude with persistent memory across conversations, combin
      "mcpServers": {
        "claude-brain": {
          "command": "node",
-         "args": ["/path/to/claude-brain/index.js"]
+         "args": ["/path/to/claude-brain/index.js"],
+         "env": {
+           "BRAIN_DATA_PATH": "/custom/path/to/brain/data"
+         }
        }
      }
    }
    ```
+
+3. **Environment Variables**:
+   - `BRAIN_DATA_PATH` (optional): Custom path for brain data storage. Defaults to `~/.claude-brain/brain` if not specified.
 
 4. **Configure Claude's System Message (IMPORTANT)**:
    To get Claude to automatically use the brain tools, add this to your Claude Desktop user preferences:
