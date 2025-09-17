@@ -1379,23 +1379,13 @@ try:
     from obsidian_integration.unified_search import UnifiedSearch
     searcher = UnifiedSearch(brain_db_path="${BRAIN_DB_PATH}", vault_path="${VAULT_PATH}")
     
-    # Debug: log the query being executed
-    print(f"Executing search with query: ${escapedQuery}, limit: ${limit}, source: ${source}", file=sys.stderr)
-    
     results = searcher.search("${escapedQuery}", limit=${limit}, source="${source}")
     
-    # Debug: log what we got back
-    print(f"Search returned: {results}", file=sys.stderr)
-    
-    # Process results by source
-    all_results = results.get("results", [])
-    brain_results = [r for r in all_results if r.get("source") == "brain"]
-    obsidian_results = [r for r in all_results if r.get("source") == "obsidian"]
-    
+    # Use results directly from UnifiedSearch
     output = {
-        "brain_count": len(brain_results),
-        "obsidian_count": len(obsidian_results),
-        "merged": all_results[:10]
+        "brain_count": results.get("brain_count", 0),
+        "obsidian_count": results.get("obsidian_count", 0),
+        "merged": results.get("merged", [])[:10]
     }
     
     print(json.dumps(output))
@@ -1431,15 +1421,53 @@ except Exception as e:
         // Try to extract JSON from stdout even if there's extra output
         let results;
         try {
-          // Find the last valid JSON in the output
-          const jsonMatch = stdout.match(/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g);
-          if (jsonMatch) {
-            results = JSON.parse(jsonMatch[jsonMatch.length - 1]);
+          // Try direct JSON parsing first (most common case)
+          const trimmedOutput = stdout.trim();
+          if (trimmedOutput.startsWith('{') && trimmedOutput.endsWith('}')) {
+            results = JSON.parse(trimmedOutput);
           } else {
-            throw new Error('No valid JSON found in output');
+            // Fallback: find JSON in multi-line output
+            const lines = stdout.split('\n');
+            let jsonStart = -1;
+            let braceCount = 0;
+            let jsonEnd = -1;
+
+            // Find start of JSON object
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i].trim().startsWith('{')) {
+                jsonStart = i;
+                break;
+              }
+            }
+
+            if (jsonStart >= 0) {
+              // Count braces to find complete JSON
+              for (let i = jsonStart; i < lines.length; i++) {
+                const line = lines[i];
+                for (const char of line) {
+                  if (char === '{') braceCount++;
+                  if (char === '}') braceCount--;
+                  if (braceCount === 0 && char === '}') {
+                    jsonEnd = i;
+                    break;
+                  }
+                }
+                if (jsonEnd >= 0) break;
+              }
+
+              if (jsonEnd >= 0) {
+                const jsonText = lines.slice(jsonStart, jsonEnd + 1).join('\n');
+                results = JSON.parse(jsonText);
+              } else {
+                throw new Error('No complete JSON found in output');
+              }
+            } else {
+              throw new Error('No JSON start found in output');
+            }
           }
         } catch (parseError) {
           console.error('Failed to parse output:', stdout);
+          console.error('Parse error:', parseError.message);
           results = { error: 'Failed to parse search results', brain_count: 0, obsidian_count: 0, merged: [] };
         }
         

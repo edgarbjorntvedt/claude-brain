@@ -19,22 +19,41 @@ class UnifiedSearch:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
-            # Search in brain_memories table
-            cursor.execute("""
-                SELECT key, value, type, created_at
-                FROM memories
-                WHERE key LIKE ? OR value LIKE ?
-                ORDER BY created_at DESC
-                LIMIT ?
-            """, (f'%{query}%', f'%{query}%', limit))
+            # Search in memories table using FTS5 if available
+            try:
+                # Try FTS5 first for better search
+                cursor.execute("""
+                    SELECT key, value, type, created_at
+                    FROM memories
+                    WHERE rowid IN (
+                        SELECT rowid FROM memories_fts
+                        WHERE memories_fts MATCH ?
+                    )
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                """, (query, limit))
+            except:
+                # Fallback to LIKE search
+                cursor.execute("""
+                    SELECT key, value, type, created_at
+                    FROM memories
+                    WHERE key LIKE ? OR value LIKE ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                """, (f'%{query}%', f'%{query}%', limit))
             
             results = []
             for row in cursor.fetchall():
+                # Truncate value to prevent JSON parsing issues
+                value = row['value']
+                if len(value) > 150:
+                    value = value[:150] + '...'
+
                 results.append({
                     'source': 'brain',
                     'type': row['type'],
                     'key': row['key'],
-                    'value': row['value'][:200] + '...' if len(row['value']) > 200 else row['value'],
+                    'value': value,
                     'created_at': row['created_at']
                 })
             
@@ -86,21 +105,45 @@ class UnifiedSearch:
     
     def search(self, query: str, limit: int = 20, source: str = 'all') -> Dict[str, Any]:
         """Unified search across brain and obsidian."""
-        results = {
-            'query': query,
-            'results': []
-        }
-        
+        brain_results = []
+        obsidian_results = []
+
         if source in ['all', 'brain']:
             brain_results = self.search_brain(query, limit)
-            results['results'].extend(brain_results)
-        
+
         if source in ['all', 'obsidian']:
             obsidian_results = self.search_obsidian(query, limit)
-            results['results'].extend(obsidian_results)
-        
-        # Limit total results
-        results['results'] = results['results'][:limit]
-        results['count'] = len(results['results'])
-        
-        return results
+
+        # Merge and limit results
+        all_results = brain_results + obsidian_results
+        merged = all_results[:limit]
+
+        return {
+            'query': query,
+            'brain_count': len(brain_results),
+            'obsidian_count': len(obsidian_results),
+            'merged': merged,
+            'count': len(merged)
+        }
+
+
+if __name__ == "__main__":
+    import sys
+    import os
+
+    if len(sys.argv) < 4:
+        print("Usage: python unified_search.py <query> <limit> <source>")
+        sys.exit(1)
+
+    query = sys.argv[1]
+    limit = int(sys.argv[2])
+    source = sys.argv[3]
+
+    # Get paths from config
+    brain_db_path = os.path.expanduser("~/.claude-brain/brain/brain/brain.db")
+    vault_path = os.path.expanduser("~/.claude-brain/brain/BrainVault")
+
+    searcher = UnifiedSearch(brain_db_path, vault_path)
+    results = searcher.search(query, limit, source)
+
+    print(json.dumps(results, indent=2))
