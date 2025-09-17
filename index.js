@@ -95,27 +95,81 @@ CREATE INDEX IF NOT EXISTS idx_state_key ON ${STATE_TABLE_NAME}(key);
 CREATE INDEX IF NOT EXISTS idx_state_updated ON ${STATE_TABLE_NAME}(updated_at DESC);
 `;
 
-// Initialize state table on startup
+// Initialize state table and FTS5 tables on startup
 function initializeStateTable() {
   try {
     const db = new Database(BRAIN_DB_PATH);
     db.exec(STATE_SCHEMA);
-    
+
     // Create update trigger
     db.exec(`
-      CREATE TRIGGER IF NOT EXISTS update_state_timestamp 
+      CREATE TRIGGER IF NOT EXISTS update_state_timestamp
       AFTER UPDATE ON ${STATE_TABLE_NAME}
       BEGIN
-        UPDATE ${STATE_TABLE_NAME} 
+        UPDATE ${STATE_TABLE_NAME}
         SET updated_at = CURRENT_TIMESTAMP, version = version + 1
         WHERE id = NEW.id;
       END;
     `);
-    
+
+    // Initialize memories table if it doesn't exist
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT NOT NULL,
+        type TEXT DEFAULT 'general',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        accessed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        metadata TEXT DEFAULT '{}'
+      )
+    `);
+
+    // Create FTS5 virtual table for memories
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+        key, value, type, content='memories', content_rowid='id'
+      );
+    `);
+
+    // Create triggers to keep FTS5 table in sync with memories
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+        INSERT INTO memories_fts(rowid, key, value, type) VALUES (new.id, new.key, new.value, new.type);
+      END;
+    `);
+
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, key, value, type) VALUES('delete', old.id, old.key, old.value, old.type);
+      END;
+    `);
+
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, key, value, type) VALUES('delete', old.id, old.key, old.value, old.type);
+        INSERT INTO memories_fts(rowid, key, value, type) VALUES (new.id, new.key, new.value, new.type);
+      END;
+    `);
+
+    // Check if FTS table needs initial population
+    const ftsCount = db.prepare('SELECT COUNT(*) as count FROM memories_fts').get();
+    const memCount = db.prepare('SELECT COUNT(*) as count FROM memories').get();
+
+    if (ftsCount.count === 0 && memCount.count > 0) {
+      console.error('[Brain Unified] Populating FTS5 index...');
+      db.exec(`
+        INSERT INTO memories_fts(rowid, key, value, type)
+        SELECT id, key, value, type FROM memories;
+      `);
+      console.error(`[Brain Unified] Populated FTS5 with ${memCount.count} memories`);
+    }
+
     db.close();
-    console.error('[Brain Unified] State table initialized');
+    console.error('[Brain Unified] State table and FTS5 index initialized');
   } catch (error) {
-    console.error('[Brain Unified] Error initializing state table:', error);
+    console.error('[Brain Unified] Error initializing tables:', error);
   }
 }
 
@@ -329,50 +383,126 @@ const tools = [
   
   {
     name: 'brain_recall',
-    description: 'Search through Brain memories',
+    description: 'Search through Brain memories using FTS5',
     inputSchema: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Search query' },
-        limit: { type: 'number', description: 'Max results', default: 10 }
+        limit: { type: 'number', description: 'Max results', default: 10 },
+        mode: {
+          type: 'string',
+          description: 'Search mode for different use cases',
+          enum: ['balanced', 'title-focused', 'content-focused', 'recent', 'exact'],
+          default: 'balanced'
+        }
       },
       required: ['query']
     },
-    handler: async ({ query, limit = 10 }) => {
+    handler: async ({ query, limit = 10, mode = 'balanced' }) => {
       try {
         const db = new Database(BRAIN_DB_PATH);
-        
-        const results = db.prepare(
-          `SELECT key, value, type, created_at 
-           FROM memories 
-           WHERE key LIKE ? OR value LIKE ?
-           ORDER BY accessed_at DESC
-           LIMIT ?`
-        ).all(`%${query}%`, `%${query}%`, limit);
-        
-        // Update access time
+
+        // Define search modes with optimized weights and strategies
+        const searchModes = {
+          balanced: { weights: [1.0, 1.0, 0.5], description: 'Equal weight to keys and content' },
+          'title-focused': { weights: [3.0, 1.0, 0.3], description: 'Prioritize memory keys/titles' },
+          'content-focused': { weights: [0.5, 2.0, 0.3], description: 'Prioritize memory content' },
+          recent: { weights: null, description: 'Sort by recency, not relevance' },
+          exact: { weights: null, description: 'Exact phrase matching' }
+        };
+
+        const currentMode = searchModes[mode] || searchModes.balanced;
+        let results;
+
+        // Try FTS5 search first
+        try {
+          if (mode === 'recent') {
+            // Recent mode: use FTS but sort by date
+            results = db.prepare(`
+              SELECT m.key, m.value, m.type, m.created_at,
+                     bm25(memories_fts) as score
+              FROM memories_fts
+              JOIN memories m ON memories_fts.rowid = m.id
+              WHERE memories_fts MATCH ?
+              ORDER BY m.accessed_at DESC, score
+              LIMIT ?
+            `).all(query, limit);
+          } else if (mode === 'exact') {
+            // Exact mode: use phrase search
+            const phraseQuery = `"${query}"`;
+            results = db.prepare(`
+              SELECT m.key, m.value, m.type, m.created_at,
+                     bm25(memories_fts) as score
+              FROM memories_fts
+              JOIN memories m ON memories_fts.rowid = m.id
+              WHERE memories_fts MATCH ?
+              ORDER BY score
+              LIMIT ?
+            `).all(phraseQuery, limit);
+          } else if (currentMode.weights) {
+            // Use weighted BM25 scoring
+            results = db.prepare(`
+              SELECT m.key, m.value, m.type, m.created_at,
+                     bm25(memories_fts, ?, ?, ?) as score
+              FROM memories_fts
+              JOIN memories m ON memories_fts.rowid = m.id
+              WHERE memories_fts MATCH ?
+              ORDER BY score
+              LIMIT ?
+            `).all(currentMode.weights[0], currentMode.weights[1], currentMode.weights[2], query, limit);
+          } else {
+            // Default BM25 scoring
+            results = db.prepare(`
+              SELECT m.key, m.value, m.type, m.created_at,
+                     bm25(memories_fts) as score
+              FROM memories_fts
+              JOIN memories m ON memories_fts.rowid = m.id
+              WHERE memories_fts MATCH ?
+              ORDER BY score
+              LIMIT ?
+            `).all(query, limit);
+          }
+        } catch (ftsError) {
+          // Fallback to LIKE search if FTS5 fails
+          console.error('[Brain Recall] FTS5 search failed, using fallback:', ftsError.message);
+          results = db.prepare(
+            `SELECT key, value, type, created_at, 0 as score
+             FROM memories
+             WHERE key LIKE ? OR value LIKE ?
+             ORDER BY accessed_at DESC
+             LIMIT ?`
+          ).all(`%${query}%`, `%${query}%`, limit);
+        }
+
+        // Update access time for found memories
         if (results.length > 0) {
           const keys = results.map(r => r.key);
           const placeholders = keys.map(() => '?').join(',');
           db.prepare(
-            `UPDATE memories SET accessed_at = CURRENT_TIMESTAMP 
+            `UPDATE memories SET accessed_at = CURRENT_TIMESTAMP
              WHERE key IN (${placeholders})`
           ).run(...keys);
         }
-        
+
         db.close();
-        
-        let output = `🔍 Searching memories for: "${query}"...\\n`;
-        output += `✓ Found ${results.length} matching memories:\\n`;
+
+        let output = `🔍 Search: "${query}" (${mode})\\n`;
+        output += `📝 Mode: ${currentMode.description}\\n`;
+        output += `✓ Found ${results.length} memories:\\n`;
 
         if (results.length === 0) {
-          if (query.split(' ').length > 1) {
-            output += `Try searching with fewer keywords.\\n`;
-          }
+          output += `\\n💡 Try different search modes:\\n`;
+          output += `• mode: "content-focused" - search mainly in content\\n`;
+          output += `• mode: "title-focused" - search mainly in keys/titles\\n`;
+          output += `• mode: "recent" - show recent matches first\\n`;
+          output += `• mode: "exact" - exact phrase matching\\n`;
         }
 
         for (const result of results) {
-          output += `\\n📌 ${result.key} (${result.type})\\n`;
+          const scoreText = result.score !== undefined && result.score !== 0
+            ? ` [${result.score.toFixed(3)}]`
+            : '';
+          output += `\\n📌 ${result.key} (${result.type})${scoreText}\\n`;
           try {
             const value = JSON.parse(result.value);
             output += `   ${JSON.stringify(value, null, 2).substring(0, 200)}...\\n`;
@@ -380,14 +510,14 @@ const tools = [
             output += `   ${result.value.substring(0, 200)}...\\n`;
           }
         }
-        
+
         return { content: [{ type: 'text', text: output }] };
       } catch (error) {
-        return { 
-          content: [{ 
-            type: 'text', 
-            text: `❌ Error searching memories: ${error.message}` 
-          }] 
+        return {
+          content: [{
+            type: 'text',
+            text: `❌ Error searching memories: ${error.message}`
+          }]
         };
       }
     }
@@ -1637,26 +1767,55 @@ brain_remember {
             break;
             
           case 'brain_recall':
-            helpText = `🔍 brain_recall - Search through memories
+            helpText = `🔍 brain_recall - Smart search through memories
 
-Searches both keys and values for matching content.
+Advanced full-text search with different modes for different use cases.
 
 Parameters:
-- query (required): Search keyword (preferred) or search term
+- query (required): Search term or phrase
 - limit: Max results (default: 10)
+- mode: Search strategy (default: "balanced")
 
-Example:
-brain_recall { "query": "API project", "limit": 5 }
+Search Modes:
+• balanced - Equal weight to keys and content (default)
+• title-focused - Prioritize memory keys/titles
+• content-focused - Search mainly in content
+• recent - Show recent matches first
+• exact - Exact phrase matching
 
-Notes:
-- Searches are case-insensitive
-- Updates access time for found memories
-- Returns key, type, and content preview
+Examples:
+Basic search:
+brain_recall { "query": "API project" }
 
-Best Practices:
-- Use 1-2 keywords for best results
-- Avoid long phrases or full sentences
-- Try synonyms if no results found`;
+Find by title/key:
+brain_recall {
+  "query": "database",
+  "mode": "title-focused"
+}
+
+Search in content:
+brain_recall {
+  "query": "implementation details",
+  "mode": "content-focused"
+}
+
+Recent mentions:
+brain_recall {
+  "query": "bug",
+  "mode": "recent"
+}
+
+Exact phrase:
+brain_recall {
+  "query": "error handling",
+  "mode": "exact"
+}
+
+Features:
+- BM25 relevance scoring
+- Intelligent search modes
+- FTS5 with automatic fallback
+- Updates access tracking`;
             break;
             
           case 'brain_execute':

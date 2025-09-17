@@ -70,7 +70,7 @@ Claude Brain provides Claude with persistent memory across conversations, combin
 5. **Available Brain Functions**:
    - `brain_init` - Initialize your session and load context
    - `brain_remember(key, value, type)` - Store information
-   - `brain_recall(query)` - Search and retrieve memories
+   - `brain_recall(query, limit, mode)` - Smart search with intelligent modes
    - `brain_execute(code, language)` - Execute Python or shell commands
    - `brain_status()` - Check system status
    - `brain_analyze()` - Analyze vault for insights and connections
